@@ -15,8 +15,10 @@ variable "api_allowed_cidrs" {
   type        = list(string)
 
   validation {
-    condition     = length(var.api_allowed_cidrs) > 0 && !contains(var.api_allowed_cidrs, "0.0.0.0/0")
-    error_message = "Restrict the source. 0.0.0.0/0 is not allowed."
+    condition = length(var.api_allowed_cidrs) > 0 && alltrue([
+      for cidr in var.api_allowed_cidrs : can(cidrhost(cidr, 0)) && try(tonumber(split("/", cidr)[1]), 0) >= 8
+    ])
+    error_message = "Restrict the source. Each entry must be a valid CIDR with a prefix length of /8 or longer."
   }
 }
 
@@ -27,7 +29,7 @@ variable "kubernetes_version" {
 }
 
 variable "instance_type" {
-  description = "Instance type for the node (x86_64 only)"
+  description = "Instance type that runs the initial node (x86_64 only)"
   type        = string
   default     = "r6i.4xlarge"
 }
@@ -56,7 +58,7 @@ variable "worker_instance_type" {
 }
 
 variable "extra_node_tags" {
-  description = "Extra tags for the node instances and volumes (for example, a tag that opts out of an account-level scheduled stop)"
+  description = "Extra tags for the EC2 instances and their volumes (for example, a tag that opts out of an account-level scheduled stop)"
   type        = map(string)
   default     = {}
 }

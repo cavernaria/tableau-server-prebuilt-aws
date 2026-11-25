@@ -31,19 +31,35 @@ REG_INFO="$ROOT/k8s/reg-info.local.json"
 
 # 1. Download the chart and verify its checksum (it is not committed to the repository)
 mkdir -p "$CACHE"
-[ -f "$TARBALL" ] || curl -fsSL -o "$TARBALL" "$URL"
-echo "${SHA256}  ${TARBALL}" | shasum -a 256 -c - >/dev/null \
-  || { echo "Checksum mismatch: $TARBALL" >&2; exit 1; }
+# Download to a temporary name first, so an interrupted download is never mistaken for the real file.
+if [ ! -f "$TARBALL" ]; then
+  curl -fsSL -o "$TARBALL.part" "$URL"
+  mv "$TARBALL.part" "$TARBALL"
+fi
+echo "${SHA256}  ${TARBALL}" | shasum -a 256 -c - >/dev/null || {
+  rm -f "$TARBALL"
+  echo "Checksum mismatch. Removed $TARBALL; run again to download it again." >&2
+  exit 1
+}
 [ -d "$CHART" ] || tar -xzf "$TARBALL" -C "$CACHE" \
   "tableau-server-container-setup-tool-${VERSION}/helm/tableau-server"
 
 [ -f "$REG_INFO" ] || { echo "$REG_INFO not found. Copy k8s/reg-info.example.json and fill it in." >&2; exit 1; }
 
-# 2. Read the secrets from Secrets Manager and pass them to helm on stdin (never in files or arguments)
+# 2. Read the secrets from Secrets Manager and pass them to helm on stdin (never in files or command arguments)
+# Stop here if a secret has no value yet, so that Tableau Server is never installed with an empty key or password.
 secret() {
-  aws secretsmanager get-secret-value --region "$REGION" \
-    --secret-id "$NAME/$1" --query SecretString --output text
+  local value
+  value="$(aws secretsmanager get-secret-value --region "$REGION" \
+    --secret-id "$NAME/$1" --query SecretString --output text)" || value=""
+  if [ -z "$value" ] || [ "$value" = "None" ]; then
+    echo "The secret $NAME/$1 has no value. Set it in Secrets Manager, then run this script again." >&2
+    return 1
+  fi
+  printf '%s' "$value"
 }
+LICENSE_KEY="$(secret license-key)"
+ADMIN_PASSWORD="$(secret admin-password)"
 
 # Values per topology. This repository's overrides are layered on top of the values bundled with the chart.
 K="kubectl --context $CONTEXT -n $NAMESPACE"
@@ -65,8 +81,9 @@ else
   )
 fi
 
-jq -n --arg key "$(secret license-key)" --arg pw "$(secret admin-password)" \
-  '{secrets: {licenseKey: $key, tableauPassword: $pw}}' |
+# jq reads the values from its environment, so they do not appear in any process's argument list.
+TS_LICENSE_KEY="$LICENSE_KEY" TS_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  jq -n '{secrets: {licenseKey: env.TS_LICENSE_KEY, tableauPassword: env.TS_ADMIN_PASSWORD}}' |
   helm upgrade --install "$RELEASE" "$CHART" \
     --kube-context "$CONTEXT" --namespace "$NAMESPACE" --create-namespace \
     "${HELM_ARGS[@]}" \
@@ -93,7 +110,9 @@ if [ "$TOPOLOGY" = "multi" ]; then
   done
   "$ROOT/scripts/status.sh"
   [ "$nodes" -eq "$EXPECTED" ] || { echo "${nodes} nodes are registered (expected ${EXPECTED})." >&2; exit 1; }
-  echo "${EXPECTED} nodes are registered."
+  # This confirms registration only. Whether processes run on the workers is shown in the status above.
+  echo "${EXPECTED} nodes are registered. Check the process status above for what runs on each node."
 else
   $K get pods -o wide
 fi
+echo "Elapsed (deploy): $((SECONDS / 60)) min $((SECONDS % 60)) s"

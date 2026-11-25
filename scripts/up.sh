@@ -27,4 +27,7 @@ aws eks update-kubeconfig --region "$(terraform output -raw region)" \
 kubectl --context "$CONTEXT" wait node --all --for=condition=Ready --timeout=10m
 kubectl --context "$CONTEXT" apply -f "$ROOT/k8s/storageclass-gp3.yaml"
 
+# On the first run the secrets have no values yet, and deploy.sh stops here and says so.
+# Set the values, then run this script again.
 "$ROOT/scripts/deploy.sh"
+echo "Elapsed (up): $((SECONDS / 60)) min $((SECONDS % 60)) s"
