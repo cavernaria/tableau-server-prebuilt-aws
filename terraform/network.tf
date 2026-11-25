@@ -20,7 +20,7 @@ resource "aws_internet_gateway" "this" {
   tags = { Name = var.name }
 }
 
-# NAT Gateway を置くためだけのパブリックサブネット。インスタンスは置かない。
+# Public subnet that exists only to host the NAT Gateway. No instances are placed here.
 resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.this.id
   availability_zone = local.azs[0]
@@ -29,8 +29,8 @@ resource "aws_subnet" "public" {
   tags = { Name = "${var.name}-public-${local.azs[0]}" }
 }
 
-# EKS は 2 つ以上の AZ のサブネットを求める。インスタンスを置くのは 1 つ目だけ。
-# マルチノードの検証ではこの 3 つをそのまま使える。
+# EKS requires subnets in at least two AZs. Instances are placed only in the first one.
+# The multi-node topology uses these subnets as is.
 resource "aws_subnet" "private" {
   count = 3
 

@@ -1,11 +1,11 @@
-# マルチノード構成の bootstrap ボリューム。初期ノードが書いたブートストラップファイルを、ワーカーが読む。
-# Pod が別々のインスタンスに載るので、EBS（1 台にしか付かない）ではなく EFS を使う。
-# 単一ノード構成では何も作らない。
+# Bootstrap volume for the multi-node topology. The workers read the bootstrap file written by the initial node.
+# The Pods run on separate instances, so this uses EFS, not EBS (which attaches to one instance only).
+# Nothing is created for the single-node topology.
 locals {
   multi = var.topology == "multi"
 }
 
-# ブートストラップファイルはマスターキーストアの複製を含むので、保存時に暗号化する。
+# The bootstrap file contains a copy of the master keystore, so it is encrypted at rest.
 resource "aws_efs_file_system" "bootstrap" {
   count = local.multi ? 1 : 0
 
@@ -24,8 +24,8 @@ resource "aws_security_group" "efs" {
   tags = { Name = "${var.name}-efs" }
 }
 
-# マネージドノードグループのインスタンスには、EKS がクラスタのセキュリティグループを付ける。
-# NFS（2049 番）は、そのセキュリティグループからだけ受ける。
+# EKS attaches the cluster security group to the instances in a managed node group.
+# NFS (port 2049) is accepted only from that security group.
 resource "aws_vpc_security_group_ingress_rule" "efs_nfs" {
   count = local.multi ? 1 : 0
 
@@ -36,7 +36,7 @@ resource "aws_vpc_security_group_ingress_rule" "efs_nfs" {
   to_port                      = 2049
 }
 
-# インスタンスを置く AZ にだけマウントターゲットを作る。
+# A mount target is created only in the AZ where the instances are placed.
 resource "aws_efs_mount_target" "bootstrap" {
   count = local.multi ? 1 : 0
 

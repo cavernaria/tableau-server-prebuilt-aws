@@ -1,7 +1,7 @@
-# source して使う。これ以降の標準出力と標準エラーを、画面に加えて .cache/<名前>.log にも書く。
-# 検証者が手元で実行した結果を、あとからエージェントが読めるようにするためのもの。
-# ログは追記で、ライセンスキーの形（英数字 4 桁 × 5 組）の文字列は伏せ字にする。
-# 使い方: source "$ROOT/scripts/lib/log.sh"; start_log "$ROOT" up
+# Source this file. From then on, stdout and stderr go to .cache/<name>.log as well as the terminal.
+# This keeps a record of each run so it can be reviewed later.
+# The log is appended to, and strings shaped like a license key (five groups of four alphanumerics) are redacted.
+# Usage: source "$ROOT/scripts/lib/log.sh"; start_log "$ROOT" up
 
 start_log() {
   local root="$1" name="$2"

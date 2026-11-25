@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 手元の 8080 番を Tableau Server のゲートウェイ（Pod の 8080 番）に転送する。
-# 実行している間だけ http://localhost:8080 で使える。Ctrl-C で止める。
-# チャートの Service は 8080 番を出していないので、Pod に直接つなぐ。
+# Forwards local port 8080 to the Tableau Server gateway (port 8080 on the Pod).
+# http://localhost:8080 works only while this is running. Stop it with Ctrl-C.
+# The chart's Service does not expose port 8080, so this connects to the Pod directly.
 set -euo pipefail
 
 CONTEXT="${KUBE_CONTEXT:-tableau-prebuilt}"
 NAMESPACE="${NAMESPACE:-tableau}"
 RELEASE="${RELEASE:-tableau}"
 
-echo "http://localhost:8080 を開いてください（止めるには Ctrl-C）"
+echo "Open http://localhost:8080 (press Ctrl-C to stop)"
 exec kubectl --context "$CONTEXT" -n "$NAMESPACE" port-forward \
   --address 127.0.0.1 "pod/${RELEASE}-tableau-server-primary-0" 8080:8080

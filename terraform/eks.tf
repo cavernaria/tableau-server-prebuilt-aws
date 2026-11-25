@@ -1,6 +1,6 @@
-# EKS の Secret と Secrets Manager のシークレットを暗号化する鍵。
+# Key that encrypts the EKS Secrets and the Secrets Manager secrets.
 resource "aws_kms_key" "secrets" {
-  description             = "${var.name}: EKS の Secret と Secrets Manager の暗号化"
+  description             = "${var.name}: encryption for EKS Secrets and Secrets Manager"
   enable_key_rotation     = true
   deletion_window_in_days = 7
 }
@@ -106,8 +106,8 @@ resource "aws_launch_template" "node" {
     http_put_response_hop_limit = 2
   }
 
-  # インスタンスを定時に自動停止する仕組みがあるアカウントでは、止まるとインスタンスが入れ替わる。
-  # 停止の対象から外すタグが要るときは extra_node_tags で渡す。
+  # In an account that stops instances on a schedule, a stopped instance gets replaced.
+  # If a tag is needed to opt out of that, pass it in extra_node_tags.
   dynamic "tag_specifications" {
     for_each = toset(["instance", "volume"])
 
@@ -130,13 +130,13 @@ resource "aws_eks_node_group" "this" {
   node_group_name = "tableau"
   node_role_arn   = aws_iam_role.node.arn
 
-  # EBS は AZ をまたげないので、インスタンスを置く AZ は 1 つに固定する。
+  # An EBS volume cannot move across AZs, so the instances are pinned to one AZ.
   subnet_ids     = [aws_subnet.private[0].id]
   instance_types = [var.instance_type]
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"
 
-  # 初期ノードの Pod をこのインスタンスに載せるための目印（マルチノード構成で使う）。
+  # Label used to schedule the initial node's Pod onto this instance (used in the multi-node topology).
   labels = {
     "tableau-role" = "primary"
   }
@@ -159,8 +159,8 @@ resource "aws_eks_node_group" "this" {
   ]
 }
 
-# ワーカーを載せるインスタンス。マルチノード構成のときだけ作る。
-# 台数は、公式 Helm チャートのマルチノード用 values のトポロジ（node2 と node3）に合わせて 2 台に固定する。
+# Instances for the workers. Created only for the multi-node topology.
+# The count is fixed at 2 to match the topology (node2 and node3) in the official Helm chart's multi-node values.
 resource "aws_eks_node_group" "worker" {
   count = local.multi ? 1 : 0
 
@@ -168,7 +168,7 @@ resource "aws_eks_node_group" "worker" {
   node_group_name = "tableau-worker"
   node_role_arn   = aws_iam_role.node.arn
 
-  # 初期ノードと同じ AZ に置く。
+  # Placed in the same AZ as the initial node.
   subnet_ids     = [aws_subnet.private[0].id]
   instance_types = [var.worker_instance_type]
   ami_type       = "AL2023_x86_64_STANDARD"

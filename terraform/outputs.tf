@@ -11,7 +11,7 @@ output "secret_names" {
 }
 
 output "update_kubeconfig" {
-  description = "kubectl をつなぐためのコマンド"
+  description = "Command to connect kubectl"
   value       = "aws eks update-kubeconfig --region ${var.region} --name ${aws_eks_cluster.this.name} --alias ${var.name}"
 }
 
@@ -20,11 +20,11 @@ output "topology" {
 }
 
 output "efs_file_system_id" {
-  description = "bootstrap ボリューム用の EFS の ID（マルチノード構成のときだけ値がある）"
+  description = "ID of the EFS file system for the bootstrap volume (set only in the multi-node topology)"
   value       = one(aws_efs_file_system.bootstrap[*].id)
 }
 
 output "efs_mount_target_ip" {
-  description = "EFS のマウントターゲットの IP（マルチノード構成のときだけ値がある）"
+  description = "IP of the EFS mount target (set only in the multi-node topology)"
   value       = one(aws_efs_mount_target.bootstrap[*].ip_address)
 }

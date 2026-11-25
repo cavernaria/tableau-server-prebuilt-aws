@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# 削除: ライセンスの認証解除 → Tableau Server の削除 → AWS のリソースの削除 → 残骸の確認。
-# 途中で失敗したら、もう一度実行すれば続きから進む。
-# 認証解除に失敗しても先へ進めたい場合だけ FORCE=1 を付ける。
+# Teardown: deactivate the license → remove Tableau Server → delete the AWS resources → check for leftovers.
+# If it fails partway, run it again and it continues from where it stopped.
+# Set FORCE=1 only when you want to continue even if deactivation fails.
 set -euo pipefail
-export AWS_PAGER=""  # aws CLI の出力をページャーで止めない
+export AWS_PAGER=""  # keep the aws CLI from pausing output in a pager
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$ROOT/scripts/lib/log.sh"
-start_log "$ROOT" down  # 出力を .cache/down.log にも残す
+start_log "$ROOT" down  # also save the output to .cache/down.log
 NAME="${NAME:-tableau-prebuilt}"
 REGION="${AWS_REGION:-ap-northeast-1}"
 CONTEXT="${KUBE_CONTEXT:-tableau-prebuilt}"
@@ -17,38 +17,38 @@ POD="${RELEASE}-tableau-server-primary-0"
 K="kubectl --context $CONTEXT -n $NAMESPACE"
 
 cat <<MSG
-次のものを削除します（元に戻せません）。
-  - Tableau Server（namespace: ${NAMESPACE}）と、そのデータの入った EBS ボリューム
-  - EKS クラスタ、インスタンス、VPC、NAT Gateway、Elastic IP
-  - マルチノード構成の場合は、bootstrap ボリューム用の EFS（ブートストラップファイルを含む）
-  - Secrets Manager のシークレット（ライセンスキー、初期管理者パスワード）と KMS キー
-削除の前に、ライセンスの認証を解除します。
+The following will be deleted (this cannot be undone).
+  - Tableau Server (namespace: ${NAMESPACE}) and the EBS volumes that hold its data
+  - The EKS cluster, instances, VPC, NAT Gateway, and Elastic IP
+  - In the multi-node topology, the EFS file system for the bootstrap volume (including the bootstrap file)
+  - The Secrets Manager secrets (license key, initial admin password) and the KMS key
+The license is deactivated before deletion.
 MSG
-read -r -p "続けますか？ (yes で続行): " answer
-[ "$answer" = "yes" ] || { echo "中止しました。"; exit 1; }
+read -r -p "Continue? (type yes to continue): " answer
+[ "$answer" = "yes" ] || { echo "Aborted."; exit 1; }
 
 if kubectl --context "$CONTEXT" get ns "$NAMESPACE" >/dev/null 2>&1; then
-  # 1. ライセンスの認証を解除する（キーは Pod の環境変数から読み、画面に出さない）
+  # 1. Deactivate the license (the key is read from the Pod's environment and never shown)
   if $K get pod "$POD" >/dev/null 2>&1; then
-    echo "ライセンスの認証を解除します..."
+    echo "Deactivating the license..."
     if ! $K exec "$POD" -- bash -lc 'tsm licenses deactivate --license-key "$LICENSE_KEY"'; then
-      [ "${FORCE:-0}" = "1" ] || { echo "認証解除に失敗しました。原因を確かめるか、FORCE=1 を付けて再実行してください。" >&2; exit 1; }
-      echo "認証解除に失敗しましたが、FORCE=1 なので続行します。" >&2
+      [ "${FORCE:-0}" = "1" ] || { echo "Deactivation failed. Find the cause, or run again with FORCE=1." >&2; exit 1; }
+      echo "Deactivation failed, but continuing because FORCE=1 is set." >&2
     fi
   fi
-  # 2. Tableau Server とボリュームを削除する（PVC は helm では消えないので明示的に消す）
+  # 2. Remove Tableau Server and its volumes (helm does not delete PVCs, so delete them explicitly)
   helm --kube-context "$CONTEXT" -n "$NAMESPACE" uninstall "$RELEASE" --wait 2>/dev/null || true
   $K delete pvc --all --wait=true
-  # マルチノード構成の bootstrap 用の PV は Retain なので、残っていれば消す。中身は EFS ごと terraform destroy で消える。
+  # The bootstrap PV in the multi-node topology is Retain, so delete it if it remains. Its contents go away with the EFS in terraform destroy.
   kubectl --context "$CONTEXT" delete pv -l "app.kubernetes.io/instance=${RELEASE},app.kubernetes.io/name=tableau-server" --ignore-not-found --wait=true
   kubectl --context "$CONTEXT" delete ns "$NAMESPACE" --wait=true
 else
-  echo "クラスタにつながらないか、namespace がありません。Tableau Server の削除は飛ばします。"
+  echo "Cannot reach the cluster, or the namespace does not exist. Skipping the removal of Tableau Server."
 fi
 
-# 3. AWS のリソースを削除する（terraform が確認を求める）
+# 3. Delete the AWS resources (terraform asks for confirmation)
 cd "$ROOT/terraform"
 terraform destroy -input=false
 
-# 4. 残骸がないことを確かめる
+# 4. Check that nothing is left
 "$ROOT/scripts/check-leftovers.sh"

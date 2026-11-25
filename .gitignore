@@ -5,7 +5,7 @@
 *.tfvars
 *.tfplan
 
-# 実行時に取得するもの
+# Fetched at run time
 .cache/
 
 k8s/reg-info.local.json

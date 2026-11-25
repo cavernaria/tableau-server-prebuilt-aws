@@ -1,8 +1,8 @@
-# 入れ物だけを作る。値は Terraform を通さずに入れるので、state には残らない。
+# Creates only the containers. The values are set outside Terraform, so they never reach the state.
 resource "aws_secretsmanager_secret" "this" {
   for_each = {
-    license-key    = "Tableau Server のライセンスキー"
-    admin-password = "Tableau Server の初期管理者のパスワード"
+    license-key    = "Tableau Server license key"
+    admin-password = "Tableau Server initial admin password"
   }
 
   name                    = "${var.name}/${each.key}"

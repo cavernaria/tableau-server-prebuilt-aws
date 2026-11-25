@@ -1,62 +1,62 @@
 variable "region" {
-  description = "展開先のリージョン"
+  description = "Region to deploy to"
   type        = string
   default     = "ap-northeast-1"
 }
 
 variable "name" {
-  description = "リソース名の接頭辞"
+  description = "Prefix for resource names"
   type        = string
   default     = "tableau-prebuilt"
 }
 
 variable "api_allowed_cidrs" {
-  description = "EKS の API エンドポイントに接続を許可する送信元 CIDR（検証者の送信元 IP）"
+  description = "Source CIDRs allowed to reach the EKS API endpoint (your own source IP)"
   type        = list(string)
 
   validation {
     condition     = length(var.api_allowed_cidrs) > 0 && !contains(var.api_allowed_cidrs, "0.0.0.0/0")
-    error_message = "送信元を絞ること。0.0.0.0/0 は指定できない。"
+    error_message = "Restrict the source. 0.0.0.0/0 is not allowed."
   }
 }
 
 variable "kubernetes_version" {
-  description = "EKS の Kubernetes バージョン"
+  description = "Kubernetes version for EKS"
   type        = string
   default     = "1.36"
 }
 
 variable "instance_type" {
-  description = "ノードを載せるインスタンスのタイプ（x86_64 のみ）"
+  description = "Instance type for the node (x86_64 only)"
   type        = string
   default     = "r6i.4xlarge"
 }
 
 variable "vpc_cidr" {
-  description = "専用 VPC の CIDR"
+  description = "CIDR of the dedicated VPC"
   type        = string
   default     = "10.0.0.0/16"
 }
 
 variable "topology" {
-  description = "Tableau Server の構成。single は単一ノード構成、multi は初期ノード 1 つとワーカー 2 つのマルチノード構成"
+  description = "Tableau Server topology. single is the single-node topology; multi is the multi-node topology with one initial node and two workers"
   type        = string
   default     = "single"
 
   validation {
     condition     = contains(["single", "multi"], var.topology)
-    error_message = "single か multi を指定すること。"
+    error_message = "Must be single or multi."
   }
 }
 
 variable "worker_instance_type" {
-  description = "ワーカーを載せるインスタンスのタイプ（x86_64 のみ。マルチノード構成のときだけ使う）"
+  description = "Instance type for the workers (x86_64 only; used only in the multi-node topology)"
   type        = string
   default     = "r6i.2xlarge"
 }
 
 variable "extra_node_tags" {
-  description = "ノードのインスタンスとボリュームに追加で付けるタグ（アカウント側の自動停止の対象から外すタグなど）"
+  description = "Extra tags for the node instances and volumes (for example, a tag that opts out of an account-level scheduled stop)"
   type        = map(string)
   default     = {}
 }
