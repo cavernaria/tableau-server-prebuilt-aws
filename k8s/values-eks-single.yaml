@@ -1,0 +1,43 @@
+# 公式 Helm チャートの values-single.yaml に重ねる上書き。チャート本体は改変しない。
+# 秘密情報（ライセンスキー、初期管理者パスワード）と登録情報はここに書かない。
+# scripts/deploy.sh が実行時に渡す。
+
+image:
+  repository: tableau/tableau-server-2026.3
+  # チャートは "repository:tag" の形でしか組み立てないので、ダイジェストはタグの後ろに付ける。
+  tag: "tableau_server_image-20263.26.1022.1645@sha256:c2c43356fee712d3e84081247ab773a8747f1b51161c0e9eea07401076789f88"
+
+primary:
+  resources:
+    requests:
+      cpu: "8"
+      memory: "64Gi"
+    limits:
+      cpu: "16"
+      memory: "96Gi"
+
+env:
+  ACCEPTEULA: "1"
+  TABLEAU_USERNAME: "admin"
+
+persistence:
+  storageClass: "gp3"
+  size: 100Gi
+  # チャートの不具合の回避。テンプレートの isMultinode 判定は文字列 "false" を返し、
+  # Go テンプレートでは空でない文字列が真になるので、単一ノード構成でもワーカーの StatefulSet が描画される。
+  # そのワーカーは bootstrap ボリュームを無条件にマウントするため、values-single.yaml の
+  # bootstrap.enabled: false のままだと API サーバーに拒否される（volumeMounts の name が見つからない）。
+  # bootstrap を有効にし、EBS で作れる ReadWriteOnce の小さなボリュームにして通す。
+  # ワーカーは replicas 0 なので、このボリュームを使うのはプライマリだけになる。
+  bootstrap:
+    enabled: true
+    storageClass: "gp3"
+    accessMode: ReadWriteOnce
+    size: 1Gi
+
+service:
+  primary:
+    type: ClusterIP
+
+ingress:
+  enabled: false

@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+
+# 実行時に取得するもの
+.cache/
+
+k8s/reg-info.local.json
